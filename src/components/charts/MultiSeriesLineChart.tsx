@@ -21,14 +21,21 @@ export function MultiSeriesLineChart({ data, activeAssets }: Props) {
 
     const sortedUniqueDates = Array.from(allDatesSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
-    // Map each asset to its starting price for normalization
+    // Map each asset to its starting price for normalization. Find the FIRST available price, rather than just index 0.
     const assetStartPrices: Record<string, number> = {};
     activeAssets.forEach(id => {
-        assetStartPrices[id] = data[id]?.[0]?.close || 1;
+        const series = data[id];
+        if (series && series.length > 0) {
+            // Find the first valid close price
+            const firstValid = series.find(p => p.close !== undefined && p.close !== null);
+            assetStartPrices[id] = firstValid ? firstValid.close : 1;
+        } else {
+            assetStartPrices[id] = 1;
+        }
     });
 
-    // Track the last known percentage for forward filling
-    const lastKnownPercentages: Record<string, number> = {};
+    // Track the last known absolute price for forward filling
+    const lastKnownPrices: Record<string, number> = {};
 
     // Build the chart data ensuring every date has a value for every active asset
     const chartData = sortedUniqueDates.map(date => {
@@ -36,18 +43,20 @@ export function MultiSeriesLineChart({ data, activeAssets }: Props) {
 
         activeAssets.forEach(assetId => {
             const assetSeries = data[assetId];
-            if (!assetSeries) return;
+            if (!assetSeries || assetSeries.length === 0) return;
 
             const matchingPoint = assetSeries.find(p => p.date === date);
 
-            if (matchingPoint) {
-                // If the asset traded on this date, calculate its new normalized % and store it
-                const normalized = ((matchingPoint.close - assetStartPrices[assetId]) / assetStartPrices[assetId]) * 100;
+            if (matchingPoint && matchingPoint.close !== undefined && matchingPoint.close !== null) {
+                // Asset traded today, update the last known tracked price
+                lastKnownPrices[assetId] = matchingPoint.close;
+            }
+
+            // Now, if we have ANY tracked price for this asset (either today's or a forward-filled past day),
+            // calculate the performance percentage against its absolute start price.
+            if (lastKnownPrices[assetId] !== undefined) {
+                const normalized = ((lastKnownPrices[assetId] - assetStartPrices[assetId]) / assetStartPrices[assetId]) * 100;
                 pointData[assetId] = normalized;
-                lastKnownPercentages[assetId] = normalized;
-            } else if (lastKnownPercentages[assetId] !== undefined) {
-                // Forward fill the last known price to smooth the line chart
-                pointData[assetId] = lastKnownPercentages[assetId];
             }
         });
 
