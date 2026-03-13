@@ -74,15 +74,17 @@ export async function GET(request: Request) {
             interval: interval
         });
 
-        // Map to expected AssetDataPoint format
-        const data = result.quotes.map((day: any) => ({
-            date: day.date.toISOString().split('T')[0],
-            open: day.open,
-            high: day.high,
-            low: day.low,
-            close: day.close,
-            volume: day.volume
-        }));
+        // Map to expected AssetDataPoint format and filter out missing data (holidays)
+        const data = result.quotes
+            .filter((day: any) => day.close !== null && day.close !== undefined)
+            .map((day: any) => ({
+                date: day.date.toISOString().split('T')[0],
+                open: day.open,
+                high: day.high,
+                low: day.low,
+                close: day.close,
+                volume: day.volume
+            }));
 
         // Filter exact number of trading days roughly if necessary, or just return all matched
         return NextResponse.json(data);
