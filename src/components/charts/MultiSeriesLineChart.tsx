@@ -13,26 +13,46 @@ interface Props {
 }
 
 export function MultiSeriesLineChart({ data, activeAssets }: Props) {
-    // We need to merge data points by Date for Recharts Multi-line
-    const mergedDataMap = new Map<string, Record<string, number | string>>();
-
+    // Generate a set of all unique dates across all assets to act as the master timeline
+    const allDatesSet = new Set<string>();
     activeAssets.forEach(assetId => {
-        const assetData = data[assetId];
-        if (!assetData || assetData.length === 0) return;
-
-        // Normalize prices to percentage change from start for comparison
-        const startPrice = assetData[0]?.close || 1;
-
-        assetData.forEach(point => {
-            const existing = mergedDataMap.get(point.date) || { date: point.date };
-            existing[assetId] = ((point.close - startPrice) / startPrice) * 100;
-            mergedDataMap.set(point.date, existing);
-        });
+        data[assetId]?.forEach(p => allDatesSet.add(p.date));
     });
 
-    const chartData = Array.from(mergedDataMap.values()).sort((a, b) =>
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    const sortedUniqueDates = Array.from(allDatesSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    // Map each asset to its starting price for normalization
+    const assetStartPrices: Record<string, number> = {};
+    activeAssets.forEach(id => {
+        assetStartPrices[id] = data[id]?.[0]?.close || 1;
+    });
+
+    // Track the last known percentage for forward filling
+    const lastKnownPercentages: Record<string, number> = {};
+
+    // Build the chart data ensuring every date has a value for every active asset
+    const chartData = sortedUniqueDates.map(date => {
+        const pointData: Record<string, number | string> = { date };
+
+        activeAssets.forEach(assetId => {
+            const assetSeries = data[assetId];
+            if (!assetSeries) return;
+
+            const matchingPoint = assetSeries.find(p => p.date === date);
+
+            if (matchingPoint) {
+                // If the asset traded on this date, calculate its new normalized % and store it
+                const normalized = ((matchingPoint.close - assetStartPrices[assetId]) / assetStartPrices[assetId]) * 100;
+                pointData[assetId] = normalized;
+                lastKnownPercentages[assetId] = normalized;
+            } else if (lastKnownPercentages[assetId] !== undefined) {
+                // Forward fill the last known price to smooth the line chart
+                pointData[assetId] = lastKnownPercentages[assetId];
+            }
+        });
+
+        return pointData;
+    });
 
     return (
         <Card className="col-span-1 border-white/5 bg-black/20 backdrop-blur-md">

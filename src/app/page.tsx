@@ -13,15 +13,7 @@ import type { TickerResult } from '@/hooks/useTickerSearch';
 import { NewsFeed } from '@/components/ui/news-feed';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-const timeframeToDays: Record<Timeframe, number> = {
-  '1D': 1,
-  '1W': 7,
-  '1M': 30,
-  '6M': 180,
-  '1Y': 365,
-  '5Y': 1825,
-};
+// Removed timeframeToDays mapping, date processing moved to backend
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
@@ -75,7 +67,7 @@ export default function Dashboard() {
     });
   };
 
-  const { data, isLoading, isError } = useMultipleAssetData(activeAssets, timeframeToDays[timeframe]);
+  const { data, isLoading, isError } = useMultipleAssetData(activeAssets, timeframe);
 
   const toggleAsset = (id: string) => {
     setActiveAssets(prev => {
